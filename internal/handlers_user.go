@@ -78,11 +78,50 @@ func (h *Handler) InsertUser(w http.ResponseWriter, r *http.Request, param httpr
 func (h *Handler) EditUserByID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 	// TODO: implement this. Query = UPDATE users SET name = '<name>' WHERE id = <userID>
 	// read json body
-
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		renderJSON(w, []byte(`
+			message: "Fail to read body"
+			`), http.StatusBadRequest)
+		return
+	}
 	// parse json body
+	var user User
+	err = json.Unmarshal(body, &user)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	// executing insert query
+	query := fmt.Sprintf("UPDATE users SET name='%s' WHERE id='%s' ", user.Name, param.ByName("userID"))
+	_, err = h.DB.Query(query)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	renderJSON(w, []byte(`
+	{
+		status:"success",
+		message:"Insert User Successfully"
+	}
+	`), http.StatusOK)
 }
 
 // DeleteUserByID a function to remove user data from DB given the userID
 func (h *Handler) DeleteUserByID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 	// TODO: implement this. Query = DELETE FROM users WHERE id = <userID>
+	userID := param.ByName("userID")
+	query := fmt.Sprintf("DELETE FROM users WHERE id=%s", userID)
+	_, err := h.DB.Exec(query)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	renderJSON(w, []byte(`
+	{
+		status:"success",
+		message:"User Deleted Successfully"
+	}
+	`), http.StatusOK)
 }

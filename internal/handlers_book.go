@@ -81,15 +81,52 @@ func (h *Handler) InsertBook(w http.ResponseWriter, r *http.Request, param httpr
 func (h *Handler) EditBook(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 	// TODO: Implement this. Query = UPDATE books SET title = '<title>', author = '<author>', isbn = '<isbn>', stock = <stock> WHERE id = <id>
 	// read json body
-
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		renderJSON(w, []byte(`
+			message: "Fail to read body"
+			`), http.StatusBadRequest)
+		return
+	}
 	// parse json body
-
-	// executing update query
+	var book Book
+	err = json.Unmarshal(body, &book)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	// executing insert query
+	query := fmt.Sprintf("UPDATE books SET title='%s', author='%s', isbn='%s',stock=%d WHERE id = '%s'", book.Title, book.Author, book.ISBN, book.Stock, param.ByName("bookID"))
+	_, err = h.DB.Query(query)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	renderJSON(w, []byte(`
+	{
+		status:"success",
+		message:"Book Updated Successfully",
+	}
+	`), http.StatusOK)
 }
 
 // DeleteBookByID a function to remove book data from DB, given bookID
 func (h *Handler) DeleteBookByID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 	// TODO: implement this. Query = DELETE FROM books WHERE id = <id>
+	bookID := param.ByName("bookID")
+	query := fmt.Sprintf("DELETE FROM books WHERE id=%s", bookID)
+	_, err := h.DB.Exec(query)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	renderJSON(w, []byte(`
+	{
+		status:"success",
+		message:"Book Deleted Successfully"
+	}
+	`), http.StatusOK)
 }
 
 // InsertMultipleBooks a function to insert multiple book data, given file of books data
@@ -136,10 +173,58 @@ func (h *Handler) InsertMultipleBooks(w http.ResponseWriter, r *http.Request, pa
 // LendBook a function to record book lending in DB and update book stock in book tables
 func (h *Handler) LendBook(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
 	// TODO: implement this.
-	// Get stock query = SELECT stock FROM books WHERE id = <bookID>
-	// Insert Book Lending query = INSERT INTO lend (user_id, book_id) VALUES (<userID>, <bookID>)
-	// Update stock query = UPDATE books SET stock = <newStock> WHERE id = <bookID>
+	body, err := ioutil.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		renderJSON(w, []byte(`
+			message: "Fail to read body"
+			`), http.StatusBadRequest)
+		return
+	}
+	// parse json body
+	var lr LendRequest
+	err = json.Unmarshal(body, &lr)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
+	// Get stock query = SELECT stock FROM books WHERE id = <bookID>
+	query := fmt.Sprintf("SELECT stock FROM books WHERE id=%d", lr.BookID)
+	rows, err := h.DB.Query(query)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	book := Book{}
+	for rows.Next() {
+		err = rows.Scan(&book.Stock)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+	// Insert Book Lending query = INSERT INTO lend (user_id, book_id) VALUES (<userID>, <bookID>)
+	query2 := fmt.Sprintf("INSERT INTO lend (user_id,book_id) VALUES (%d,%d) ", lr.UserID, lr.BookID)
+	_, err = h.DB.Exec(query2)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	book.Stock = book.Stock - 1
+	// Update stock query = UPDATE books SET stock = <newStock> WHERE id = <bookID>
+	query3 := fmt.Sprintf("UPDATE books SET stock = %d WHERE id = %d", book.Stock, lr.BookID)
+	_, err = h.DB.Exec(query3)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	renderJSON(w, []byte(`
+	{
+		status:"success",
+		message:"Stock Book Successfully"
+	}
+	`), http.StatusOK)
 	// Read userID
 
 	// parse json body
