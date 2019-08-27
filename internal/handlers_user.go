@@ -6,18 +6,30 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/julienschmidt/httprouter"
 )
 
 // GetUserByID a method to get user given userID params in URL
 func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
-	// TODO: implement this. Query = SELECT * FROM users WHERE id = <userID>
-	query := fmt.Sprintf("SELECT * FROM users WHERE id=%s", param.ByName("userID"))
-
-	rows, err := h.DB.Query(query)
+	userID, err := strconv.ParseInt(param.ByName("userID"), 10, 64)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][GetUserById] fail to convert user_id into int :%+v", err)
+		renderJSON(w, []byte(`
+		{
+			"message":"Gaboleh nakal :)"
+		}
+		`), http.StatusBadRequest)
+		return
+	}
+	// TODO: implement this. Query = SELECT * FROM users WHERE id = <userID>
+	query := fmt.Sprintf("SELECT id, COALESCE(name,'-') FROM users WHERE id=$1")
+
+	rows, err := h.DB.Query(query, userID)
+	if err != nil {
+		log.Printf("[internal][GetUserById] fail to select user user_id:%s :%+v\n",
+			param.ByName("userID"), err)
 		return
 	}
 	var users []User
@@ -25,14 +37,16 @@ func (h *Handler) GetUserByID(w http.ResponseWriter, r *http.Request, param http
 		user := User{}
 		err := rows.Scan(&user.ID, &user.Name)
 		if err != nil {
-			log.Println(err)
+			log.Printf("[internal][GetUserById] fail to scan into variable user user_id:%s :%+v\n",
+				param.ByName("userID"), err)
 			return
 		}
 		users = append(users, user)
 	}
 	bytes, err := json.Marshal(users)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][GetUserById] fail to convert array of users into byte :%+v\n",
+			err)
 		return
 	}
 	renderJSON(w, bytes, http.StatusOK)
@@ -55,14 +69,16 @@ func (h *Handler) InsertUser(w http.ResponseWriter, r *http.Request, param httpr
 	var user User
 	err = json.Unmarshal(body, &user)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][InsertUser] fail to convert json into array :%+v\n",
+			err)
 		return
 	}
 	// executing insert query
 	query := fmt.Sprintf("INSERT INTO users (id,name) VALUES (%d,'%s') ", user.ID, user.Name)
 	_, err = h.DB.Query(query)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][InsertUser] fail to create user user_id:%d :%+v\n",
+			user.ID, err)
 		return
 	}
 	renderJSON(w, []byte(`
@@ -90,14 +106,16 @@ func (h *Handler) EditUserByID(w http.ResponseWriter, r *http.Request, param htt
 	var user User
 	err = json.Unmarshal(body, &user)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][EditUserByID] fail to convert json into array :%+v\n",
+			err)
 		return
 	}
 	// executing insert query
 	query := fmt.Sprintf("UPDATE users SET name='%s' WHERE id='%s' ", user.Name, param.ByName("userID"))
 	_, err = h.DB.Query(query)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][EditUserByID] fail to update user user_id:%s :%+v\n",
+			param.ByName("userID"), err)
 		return
 	}
 	renderJSON(w, []byte(`
@@ -115,7 +133,8 @@ func (h *Handler) DeleteUserByID(w http.ResponseWriter, r *http.Request, param h
 	query := fmt.Sprintf("DELETE FROM users WHERE id=%s", userID)
 	_, err := h.DB.Exec(query)
 	if err != nil {
-		log.Println(err)
+		log.Printf("[internal][DeleteUserByID] fail to delete user user_id:%s :%+v\n",
+			userID, err)
 		return
 	}
 	renderJSON(w, []byte(`

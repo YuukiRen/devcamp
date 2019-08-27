@@ -8,6 +8,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/julienschmidt/httprouter"
@@ -15,10 +16,20 @@ import (
 
 // GetBookByID a function to get a single book given it's ID
 func (h *Handler) GetBookByID(w http.ResponseWriter, r *http.Request, param httprouter.Params) {
+	bookID, err := strconv.ParseInt(param.ByName("bookID"), 10, 64)
+	if err != nil {
+		log.Printf("[internal][GetUserById] fail to convert user_id into int :%+v", err)
+		renderJSON(w, []byte(`
+		{
+			"message":"k4m03 n4k4l"
+		}
+		`), http.StatusBadRequest)
+		return
+	}
 	// TODO: Implement this. Query = SELECT id, title, author, isbn, stock FROM books WHERE id = <bookID>
-	query := fmt.Sprintf("SELECT id,title,author,isbn,stock FROM books WHERE id=%s", param.ByName("bookID"))
+	query := fmt.Sprintf("SELECT id,title,author,isbn,stock FROM books WHERE id=$1")
 
-	rows, err := h.DB.Query(query)
+	rows, err := h.DB.Query(query, bookID)
 	if err != nil {
 		log.Println(err)
 		return
